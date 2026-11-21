@@ -24,7 +24,7 @@ npm install
 cp .env.example .env
 # edit .env:
 #   JWT_SECRET_KEY=<a long random string>
-#   ANTHROPIC_API_KEY=<your real Anthropic API key>   <-- required for live AI generation
+#   API_KEY=<your Anthropic API key>   <-- optional if entered in the app
 ```
 
 ## Run

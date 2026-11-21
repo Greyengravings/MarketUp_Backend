@@ -6,7 +6,7 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET_KEY || 'CHANGE_ME_IN_PRODUCTION',
   accessTokenExpiresIn: '15m',
   refreshTokenExpiresIn: '30d',
-  anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+  apiKey: process.env.API_KEY || '',
   anthropicModel: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
   openaiApiKey: process.env.OPENAI_API_KEY || '',
   openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',

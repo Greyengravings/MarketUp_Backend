@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -8,9 +9,10 @@ from app.core.deps import get_current_user
 from app.db import get_db
 from app.models import Business, Post, User
 from app.schemas import GenerateContentRequest, PostActionResponse, PostResponse
-from app.services.ai_service import generate_post_content
+from app.services.ai_service import GeminiAPIError, generate_post_content
 
 router = APIRouter(tags=["ai-content"])
+logger = logging.getLogger(__name__)
 
 
 def _get_business_or_404(db: Session, user: User) -> Business:
@@ -29,8 +31,21 @@ def generate_content(
         result = generate_post_content(payload, api_key=api_key)
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"AI generation failed: {e}")
+    except GeminiAPIError as e:
+        if e.status_code in (401, 403):
+            detail = "Gemini rejected the API key or access configuration."
+        elif e.status_code == 429:
+            detail = "Gemini rate limit or quota reached. Try again later."
+        elif e.status_code is not None:
+            detail = f"Gemini API request failed (HTTP status {e.status_code})."
+        else:
+            detail = str(e)
+        raise HTTPException(status_code=502, detail=detail) from e
+    except Exception as exc:
+        logger.exception("Unexpected content-generation failure")
+        raise HTTPException(
+            status_code=502, detail="Unexpected content generation failure."
+        ) from exc
 
     return PostResponse(
         id=str(uuid4()),

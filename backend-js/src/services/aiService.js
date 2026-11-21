@@ -33,15 +33,15 @@ Write one social media post for this business following the JSON schema exactly.
 }
 
 export async function generatePostContent(business, occasion) {
-  if (!config.anthropicApiKey) {
+  if (!config.apiKey) {
     const err = new Error(
-      'ANTHROPIC_API_KEY is not set. Add it to backend-js/.env to enable live AI generation.',
+      'API_KEY is not set. Add it to backend-js/.env to enable live AI generation.',
     );
     err.code = 'AI_NOT_CONFIGURED';
     throw err;
   }
 
-  const client = new Anthropic({ apiKey: config.anthropicApiKey });
+  const client = new Anthropic({ apiKey: config.apiKey });
 
   const message = await client.messages.create({
     model: config.anthropicModel,

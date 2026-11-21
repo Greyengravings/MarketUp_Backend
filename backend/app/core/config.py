@@ -12,8 +12,9 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 30
 
     # AI
-    anthropic_api_key: str = ""
-    anthropic_model: str = "claude-sonnet-4-6"
+    api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_image_model: str = "gemini-nano-banana-2.1"
 
     class Config:
         env_file = ".env"

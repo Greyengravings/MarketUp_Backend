@@ -18,7 +18,7 @@ either one without any change. Pick whichever matches your team.
 | Web framework | FastAPI | Express |
 | Database | SQLite (via SQLAlchemy ORM) | SQLite (via better-sqlite3, direct SQL) |
 | Auth | JWT (python-jose) + bcrypt (direct, not passlib) | JWT (jsonwebtoken) + bcryptjs |
-| AI provider SDK | `anthropic` (official Python SDK) | `@anthropic-ai/sdk` (official Node SDK) |
+| AI provider | Gemini REST API | Anthropic/OpenAI provider adapters |
 | Validation | Pydantic schemas | Manual validation in route handlers |
 | Server | Uvicorn (ASGI) | Node's built-in HTTP server via Express |
 
@@ -49,8 +49,8 @@ SQLite for PostgreSQL later touches only the data layer, not the routes).
 │  - Auth: password hashing, JWT issue/verify/refresh          │
 │  - Business rules: "one business profile per user",          │
 │    "post must belong to caller's business to approve", etc.  │
-│  - AI service: builds the prompt, calls Anthropic, parses     │
-│    and validates the JSON response                            │
+│  - AI service: builds the prompt, calls Gemini in Python,      │
+│    and parses and validates the JSON response                  │
 └────────────────────────┬────────────────────────────────────┘
                          │
 ┌────────────────────────▼───────────────────────────────────┐
@@ -138,7 +138,9 @@ backend/                       backend-js/
 
 `POST /ai/generate` is the heart of the product. Step by step:
 
-1. Look up the caller's business profile (404 if onboarding isn't done yet).
+1. The app sends its locally stored business profile and generation options
+   directly to the endpoint; content generation does not read or write a
+   profile or post in the server database.
 2. Build a **system prompt** that locks the model into a strict behavior:
    act as MarketUp's social media copywriter for small Indian businesses,
    and respond with *only* a single JSON object (no markdown fences, no
@@ -148,14 +150,17 @@ backend/                       backend-js/
    description, address, brand colors — plus either the caller-supplied
    `occasion` (e.g. "Diwali") or an instruction to pick something naturally
    relevant to today's date if none was given.
-4. Call the real Anthropic API (`client.messages.create(...)`) with that
-   system + user prompt.
+4. Call Gemini's `generateContent` endpoint with the app's `X-Api-Key`, or
+   the server's `API_KEY` when the app did not supply one.
 5. Parse the model's response as JSON (defensively stripping ` ```json `
    fences if the model adds them despite instructions), and validate the
    expected keys are present.
-6. Persist a new `posts` row with `status = 'pending'` and return it to the
-   client.
-7. **Error handling**: if `ANTHROPIC_API_KEY` isn't set, the service throws
+6. Return the generated post with `status = 'pending'`; the app stores it
+   locally rather than creating a database row.
+7. When image prompts are enabled, call Gemini's image model with the returned
+   prompt and include the image as a Base64 data URI; the Android app decodes
+   it to a private local file and stores the file URI with the post.
+8. **Error handling**: if `API_KEY` isn't set, the service throws
    a specific, catchable error and the route returns `503` with a clear
    message — this was deliberately tested (see §1) so the failure mode is
    honest rather than a generic crash.

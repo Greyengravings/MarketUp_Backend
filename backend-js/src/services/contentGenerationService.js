@@ -213,7 +213,7 @@ You ALWAYS respond with ONLY a single valid JSON object, matching exactly:
 }
 
 class AnthropicProvider {
-  async generate(business, options = {}, apiKey = config.anthropicApiKey) {
+  async generate(business, options = {}, apiKey = config.apiKey) {
     if (!apiKey) {
       throw new Error('ANTHROPIC_NOT_CONFIGURED');
     }
@@ -291,14 +291,14 @@ class ContentGenerationService {
 
   async generatePostContent(business, options = {}, apiKey) {
     const hasOpenAiKey = Boolean(config.openaiApiKey && !config.openaiApiKey.includes('your-key-here'));
-    const hasAnthropicKey = Boolean(config.anthropicApiKey && !config.anthropicApiKey.includes('your-key-here'));
+    const hasAnthropicKey = Boolean(config.apiKey && !config.apiKey.includes('your-key-here'));
 
     const provider = apiKey
       ? ['Anthropic', this.anthropicProvider, apiKey]
       : hasOpenAiKey
       ? ['OpenAI', this.openAiProvider]
       : hasAnthropicKey
-        ? ['Anthropic', this.anthropicProvider, config.anthropicApiKey]
+        ? ['Anthropic', this.anthropicProvider, config.apiKey]
         : null;
     if (!provider) throw new Error('AI_NOT_CONFIGURED');
 
