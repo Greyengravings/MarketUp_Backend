@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+import time
 from datetime import date
 from typing import Optional
 from urllib.error import HTTPError, URLError
@@ -51,6 +52,7 @@ def _call_gemini(
     api_key: str,
     timeout: int,
     api_revision: str | None = None,
+    max_attempts: int = 1,
 ) -> dict:
     headers = {
         "Content-Type": "application/json",
@@ -60,48 +62,60 @@ def _call_gemini(
     if api_revision:
         headers["Api-Revision"] = api_revision
 
-    gemini_request = Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
-
-    try:
-        with urlopen(gemini_request, timeout=timeout) as response:
-            response_data = json.loads(response.read().decode("utf-8"))
-
-    except HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")[:1000]
-        logger.warning(
-            "Gemini request failed (http_status=%s, response=%s)",
-            exc.code,
-            error_body,
+    for attempt in range(max_attempts):
+        gemini_request = Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            headers=headers,
+            method="POST",
         )
-        raise GeminiAPIError(
-            f"Gemini API request failed with HTTP status {exc.code}.",
-            status_code=exc.code,
-        ) from exc
 
-    except (URLError, TimeoutError) as exc:
-        logger.warning(
-            "Could not reach Gemini API (%s)",
-            type(exc).__name__,
-        )
-        raise GeminiAPIError(
-            "Could not connect to the Gemini API."
-        ) from exc
+        try:
+            with urlopen(gemini_request, timeout=timeout) as response:
+                response_data = json.loads(response.read().decode("utf-8"))
 
-    except json.JSONDecodeError as exc:
-        logger.error("Gemini returned a non-JSON API response")
-        raise GeminiAPIError(
-            "Gemini returned an invalid API response."
-        ) from exc
+        except HTTPError as exc:
+            error_body = exc.read().decode("utf-8", errors="replace")[:1000]
+            logger.warning(
+                "Gemini request failed (http_status=%s, response=%s)",
+                exc.code,
+                error_body,
+            )
+            raise GeminiAPIError(
+                f"Gemini API request failed with HTTP status {exc.code}.",
+                status_code=exc.code,
+            ) from exc
 
-    if not isinstance(response_data, dict):
-        raise GeminiAPIError("Gemini returned an invalid response.")
+        except (URLError, TimeoutError) as exc:
+            logger.warning(
+                "Gemini connection attempt %s/%s failed (%s)",
+                attempt + 1,
+                max_attempts,
+                type(exc).__name__,
+            )
 
-    return response_data
+            if attempt + 1 < max_attempts:
+                delay = 2 ** attempt
+                logger.info("Retrying Gemini request in %s seconds", delay)
+                time.sleep(delay)
+                continue
+
+            raise GeminiAPIError(
+                "Could not connect to the Gemini API."
+            ) from exc
+
+        except json.JSONDecodeError as exc:
+            logger.error("Gemini returned a non-JSON API response")
+            raise GeminiAPIError(
+                "Gemini returned an invalid API response."
+            ) from exc
+
+        if not isinstance(response_data, dict):
+            raise GeminiAPIError("Gemini returned an invalid response.")
+
+        return response_data
+
+    raise GeminiAPIError("Gemini request failed after all attempts.")
 
 
 def _parse_post_json(raw_text: str) -> dict:
@@ -122,7 +136,6 @@ def _parse_post_json(raw_text: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    # Recover a JSON object if Gemini added text outside the JSON.
     decoder = json.JSONDecoder()
 
     for index, character in enumerate(cleaned):
@@ -410,6 +423,7 @@ def generate_post_content(
             provider_api_key,
             timeout=150,
             api_revision="2026-05-20",
+            max_attempts=2,
         )
 
         generated_image = _extract_generated_image(image_response)
